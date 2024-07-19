@@ -7,7 +7,9 @@
 import argparse
 import math
 import os
+import random
 import re
+import string
 from collections import defaultdict
 
 import yaml
@@ -42,8 +44,9 @@ def main(args: argparse.Namespace) -> None:
         try:
             nodes = yaml.load(f, Loader=yaml.SafeLoader).get("proxies", [])
         except yaml.constructor.ConstructorError:
-            yaml.add_multi_constructor("str", lambda loader, suffix, node: None, Loader=yaml.SafeLoader)
-            nodes = yaml.load(f, Loader=yaml.FullLoader).get("proxies", [])
+            f.seek(0, 0)
+            yaml.add_multi_constructor("str", lambda loader, suffix, node: str(node.value), Loader=yaml.SafeLoader)
+            nodes = yaml.load(f, Loader=yaml.SafeLoader).get("proxies", [])
         except:
             nodes = []
 
@@ -59,8 +62,18 @@ def main(args: argparse.Namespace) -> None:
             if key not in records:
                 records.add(key)
 
-                name = re.sub(r"(\d+|(-\d+)?[A-Z])$", "", item.get("name", "")).strip()
+                name = re.sub(r"(\d+|(\d+)?(-\d+)?[A-Z])$", "", item.get("name", "")).strip()
+                if not name:
+                    name = "".join(random.sample(string.ascii_uppercase, 6))
+
                 item["name"] = name
+
+                if args.secure:
+                    if "tls" in item:
+                        item["tls"] = True
+                    if "skip-cert-verify" in item:
+                        item["skip-cert-verify"] = False
+
                 caches[name].append(item)
 
     proxies = list()
@@ -110,6 +123,15 @@ if __name__ == "__main__":
         required=False,
         default=2,
         help="Number of digits to fill",
+    )
+
+    parser.add_argument(
+        "-s",
+        "--secure",
+        dest="secure",
+        action="store_true",
+        default=False,
+        help="Enforce TLS and reject skipping certificate validation",
     )
 
     main(parser.parse_args())

@@ -6,8 +6,10 @@
 import json
 import math
 import os
+import random
 import re
 import socket
+import string
 import urllib
 from collections import defaultdict
 
@@ -101,7 +103,7 @@ def load_mmdb(directory: str, filename: str, update: bool = False) -> database.R
     return database.Reader(filepath)
 
 
-def rename(proxy: dict, reader: database.Reader, emoji_patterns: dict = None) -> dict:
+def rename(proxy: dict, reader: database.Reader) -> dict:
     if not proxy or not isinstance(proxy, dict):
         return None
 
@@ -127,10 +129,6 @@ def rename(proxy: dict, reader: database.Reader, emoji_patterns: dict = None) ->
         else:
             name = country
 
-        if emoji_patterns and isinstance(emoji_patterns, dict):
-            emoji = utils.get_emoji(text=name, patterns=emoji_patterns, default="🇺🇸")
-            name = f"{emoji} {name}"
-
         proxy["name"] = name
     except Exception:
         pass
@@ -142,7 +140,6 @@ def regularize(
     proxies: list[dict],
     directory: str = "",
     update: bool = True,
-    emoji: bool = True,
     num_threads: int = 0,
     show_progress: bool = True,
     locate: bool = False,
@@ -159,17 +156,17 @@ def regularize(
         # load mmdb
         reader = load_mmdb(directory=directory, filename="GeoLite2-Country.mmdb", update=update)
         if reader:
-            # load emoji patterns
-            emoji_patterns = utils.load_emoji_pattern() if emoji else None
-
-            tasks = [[p, reader, emoji_patterns] for p in proxies if p and isinstance(p, dict)]
+            tasks = [[p, reader] for p in proxies if p and isinstance(p, dict)]
             proxies = utils.multi_thread_run(rename, tasks, num_threads, show_progress, "")
         else:
             logger.error("skip rename proxies due to cannot load mmdb: GeoLite2-Country.mmdb")
 
     records = defaultdict(list)
     for proxy in proxies:
-        name = re.sub(r"(\d+|(-\d+)?[A-Z])$", "", proxy.get("name", "")).strip()
+        name = re.sub(r"(\d+|(\d+)?(-\d+)?[A-Z])$", "", proxy.get("name", "")).strip()
+        if not name:
+            name = "".join(random.sample(string.ascii_uppercase, 6))
+
         proxy["name"] = name
         records[name].append(proxy)
 
